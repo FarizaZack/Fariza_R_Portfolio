@@ -1,0 +1,164 @@
+---
+title: "Credit Card Trx Fraud Detection"
+author: "Fariza Zakaria"
+date: "2025-01-08"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+![Credit Card](G:\\My Drive\\Data analyst Roadmap\\Portfolio\\R Languange\\credit_card_image.png)
+
+
+## R Markdown
+
+```{r Set a CRAN mirror}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+```
+
+```{r Install missing packages}
+install.packages("dplyr")
+library(dplyr)
+```
+### Setup & Loagin Packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("DT")
+
+library(tidyverse)  # For data manipulation and visualization
+library(lubridate)  # For handling date/time
+library(ggplot2)    # For advanced plotting
+library(DT)         # For interactive tables
+library(knitr)      # For knitting reports
+
+```
+
+### Load Dataset
+
+```{r Load data}
+# Adjust file paths as per your system
+
+fraud_train <- read.csv("G:\\My Drive\\Data analyst Roadmap\\Portfolio\\R Languange\\Credit Card - Kaggle\\fraudTrain_V2.csv")
+
+fraud_test <- read.csv("G:\\My Drive\\Data analyst Roadmap\\Portfolio\\R Languange\\Credit Card - Kaggle\\fraudTest_V2.csv")
+
+setwd("G:\\My Drive\\Data analyst Roadmap\\Portfolio\\R Languange\\Credit Card - Kaggle")
+
+list.files("G:\\My Drive\\Data analyst Roadmap\\Portfolio\\R Languange\\Credit Card - Kaggle")
+
+# View the structure of the data
+str(fraud_train)
+str(fraud_test)
+
+# Preview datasets
+head(fraud_train)
+head(fraud_test)
+```
+
+### Data Cleaning
+#### Check for Duplicates
+
+```{r Remove duplicates}
+fraud_train <- fraud_train %>% distinct()
+fraud_test <- fraud_test %>% distinct()
+```
+
+#### Check for Missing Values
+
+```{r Handle missing values}
+# Remove rows with missing values
+fraud_train <- fraud_train %>% drop_na()
+fraud_test <- fraud_test %>% drop_na()
+```
+
+#### Format Data Types
+
+```{r Format data types}
+#Check structures date column
+head(fraud_train$trans_date)
+head(fraud_test$trans_date)
+
+#Handle different formats
+fraud_train$trans_date <- mdy(fraud_train$trans_date)
+fraud_test$trans_date <- mdy(fraud_test$trans_date)
+
+# Convert `is_fraud` to a factor for classification
+fraud_train$is_fraud <- as.factor(fraud_train$is_fraud)
+fraud_test$is_fraud <- as.factor(fraud_test$is_fraud)
+
+# Convert dates to date objects
+fraud_train$trans_date <- ymd(fraud_train$trans_date)
+fraud_test$trans_date <- ymd(fraud_test$trans_date)
+```
+
+### Exploratory Data Analysis (EDA) 
+#### Summary Statistics
+
+```{r Summary statistics}
+summary(fraud_train)
+summary(fraud_test)
+```
+
+#### Fraud Distribution by Category & Amount
+
+```{r Fraud by category and amount}
+# Aggregate fraud instances by category
+fraud_category <- fraud_train %>%
+  group_by(category, is_fraud) %>%
+  summarise(total = n(), avg_amt = mean(amt, na.rm = TRUE)) %>%
+  arrange(desc(total))
+
+datatable(fraud_category)  # Interactive table
+```
+
+#### Geospatial Analsis (Fraud by State)
+
+```{r Geospatial analysis}
+# Fraud rates across states
+fraud_state <- fraud_train %>%
+  group_by(state) %>%
+  summarise(fraud_rate = mean(as.numeric(is_fraud)))
+
+# Plot fraud rates across states
+ggplot(fraud_state, aes(x = reorder(state, -fraud_rate), y = fraud_rate)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Fraud Rates by State", x = "State", y = "Fraud Rate")
+```
+
+#### Age & Fraud Analysis
+
+```{r Age analysis}
+# Calculate age
+fraud_train <- fraud_train %>%
+  mutate(age = as.numeric(difftime(ymd("2020-12-31"), ymd(dob), units = "weeks")) / 52.25)
+
+# Fraud by age
+ggplot(fraud_train, aes(x = age, fill = is_fraud)) +
+  geom_histogram(bins = 30, alpha = 0.7, position = "identity") +
+  labs(title = "Fraud Distribution by Age", x = "Age", y = "Count")
+```
+
+#### Modelling (Optional)
+
+```{r Modeling}
+library(caret)
+
+# Train-test split
+set.seed(123)
+trainIndex <- createDataPartition(fraud_train$is_fraud, p = 0.8, list = FALSE)
+trainData <- fraud_train[trainIndex, ]
+testData <- fraud_train[-trainIndex, ]
+
+# Train logistic regression model
+model <- glm(is_fraud ~ amt + category + city_pop, data = trainData, family = "binomial")
+
+# Predict on test data
+predictions <- predict(model, testData, type = "response")
+testData$predicted <- ifelse(predictions > 0.5, 1, 0)
+
+# Confusion matrix
+confusionMatrix(as.factor(testData$predicted), testData$is_fraud)
+```
